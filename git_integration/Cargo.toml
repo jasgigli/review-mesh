@@ -1,0 +1,10 @@
+[package]
+name = "git_integration"
+version = "0.1.0"
+edition = "2021"
+description = "Git diff and hunk management for ReviewMesh."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+git2 = "0.18"
+common = { path = "../common" }

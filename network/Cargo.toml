@@ -1,0 +1,13 @@
+[package]
+name = "network"
+version = "0.1.0"
+edition = "2021"
+description = "P2P networking for ReviewMesh."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+libp2p = { version = "0.52", features = ["mdns", "floodsub", "noise", "tcp", "websocket"] }
+base58 = "0.2"
+hmac = "0.12"
+sha2 = "0.10"
+common = { path = "../common" }

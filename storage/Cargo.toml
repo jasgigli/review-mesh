@@ -1,0 +1,10 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2021"
+description = "SQLite storage for ReviewMesh."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rusqlite = { version = "0.31", features = ["bundled"] }
+common = { path = "../common" }

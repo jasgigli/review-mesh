@@ -1,0 +1,17 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+description = "ReviewMesh CLI application."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+tui = "0.19"
+crossterm = "0.27"
+clap = { version = "4.4", features = ["derive"] }
+common = { path = "../common" }
+network = { path = "../network" }
+git_integration = { path = "../git_integration" }
+storage = { path = "../storage" }
+tokio = { version = "1.37", features = ["rt-multi-thread", "macros", "sync"] }
+genpdf = "0.8"

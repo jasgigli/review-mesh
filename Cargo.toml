@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "common",
+    "network",
+    "git_integration",
+    "storage",
+    "cli"
+]
+
+[workspace.package]
+edition = "2021"

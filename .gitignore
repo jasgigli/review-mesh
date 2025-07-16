@@ -1,0 +1,40 @@
+# Rust/Cargo
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDEs/editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# By-products
+*.dSYM/
+*.pdb
+*.dll
+*.exe
+*.obj
+*.o
+*.rlib
+*.rmeta
+*.so
+*.dylib
+*.a
+*.lib
+
+# Misc
+*.old
+*.orig
+
+# Node/npm (for public/scripts or docs)
+node_modules/
+public/npm-publish/
