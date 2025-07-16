@@ -8,10 +8,15 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 tui = "0.19"
 crossterm = "0.27"
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.0", features = ["derive"] }
 common = { path = "../common" }
 network = { path = "../network" }
 git_integration = { path = "../git_integration" }
 storage = { path = "../storage" }
 tokio = { version = "1.37", features = ["rt-multi-thread", "macros", "sync"] }
 genpdf = "0.2.0"
+serde_json = "1.0"
+futures = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+whoami = "1"

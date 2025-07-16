@@ -1,94 +1,148 @@
-use libp2p::{
-    identity, PeerId, Swarm, mdns::{Mdns, MdnsConfig}, noise::{Keypair as NoiseKeypair, NoiseConfig, X25519Spec, AuthenticKeypair, AuthenticKeypairRef},
-    floodsub::{self, Floodsub, FloodsubEvent, Topic}, swarm::SwarmEvent, core::upgrade, tcp::TcpConfig, Transport, NetworkBehaviour, Multiaddr
-};
-use base58::{ToBase58, FromBase58};
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
-use common::{ReviewSession, Comment, ChatLine};
 use std::collections::HashSet;
 use std::error::Error;
+use std::future::Future;
+use std::pin::Pin;
 use std::task::{Context, Poll};
-use futures::prelude::*;
+use tokio;
+
+use libp2p::{
+    core::upgrade,
+    identity,
+    noise,
+    swarm::{SwarmBuilder, SwarmEvent},
+    tcp,
+    yamux,
+    PeerId, Transport,
+};
+use libp2p::futures::StreamExt;
+use libp2p_mdns::{tokio::Behaviour as Mdns, Config as MdnsConfig};
+use libp2p::floodsub::{self, Floodsub, FloodsubEvent, Topic};
+use libp2p::swarm::NetworkBehaviour;
+use common::{ReviewSession, Comment};
 
 #[derive(NetworkBehaviour)]
+#[behaviour(to_swarm = "ReviewMeshBehaviourEvent")]
 pub struct ReviewMeshBehaviour {
     pub floodsub: Floodsub,
     pub mdns: Mdns,
 }
 
-pub struct Network {
-    pub peer_id: PeerId,
-    pub swarm: Swarm<ReviewMeshBehaviour>,
-    pub topics: HashSet<Topic>,
+#[allow(clippy::large_enum_variant)]
+pub enum ReviewMeshBehaviourEvent {
+    Floodsub(FloodsubEvent),
+    Mdns(libp2p_mdns::Event),
 }
 
-impl Network {
-    pub async fn new(session: &ReviewSession, secret: &[u8]) -> Result<Self, Box<dyn Error>> {
-        let id_keys = identity::Keypair::generate_ed25519();
+impl From<FloodsubEvent> for ReviewMeshBehaviourEvent {
+    fn from(event: FloodsubEvent) -> Self {
+        ReviewMeshBehaviourEvent::Floodsub(event)
+    }
+}
+
+impl From<libp2p_mdns::Event> for ReviewMeshBehaviourEvent {
+    fn from(event: libp2p_mdns::Event) -> Self {
+        ReviewMeshBehaviourEvent::Mdns(event)
+    }
+}
+
+pub struct NetworkManager {
+    pub swarm: libp2p::Swarm<ReviewMeshBehaviour>,
+    topic: Topic,
+}
+
+impl NetworkManager {
+    pub fn new(secret_key_seed: Option<u8>) -> Result<Self, Box<dyn Error>> {
+        let id_keys = match secret_key_seed {
+            Some(seed) => {
+                let mut sk_bytes = [0u8; 32];
+                sk_bytes[0] = seed;
+                identity::Keypair::ed25519_from_bytes(&mut sk_bytes).unwrap()
+            }
+            None => identity::Keypair::generate_ed25519(),
+        };
         let peer_id = PeerId::from(id_keys.public());
-        let noise_keys = NoiseKeypair::<X25519Spec>::new().into_authentic(&id_keys)?;
-        let transport = TcpConfig::new()
+
+        let noise_config = noise::Config::new(&id_keys).unwrap();
+
+        let transport = tcp::tokio::Transport::new(tcp::Config::default().nodelay(true))
             .upgrade(upgrade::Version::V1)
-            .authenticate(NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(libp2p::yamux::YamuxConfig::default())
+            .authenticate(noise_config)
+            .multiplex(yamux::Config::default())
+            .timeout(std::time::Duration::from_secs(20))
             .boxed();
 
-        let mut floodsub = Floodsub::new(peer_id.clone());
-        let mdns = Mdns::new(MdnsConfig::default()).await?;
-        let behaviour = ReviewMeshBehaviour { floodsub, mdns };
-        let mut swarm = Swarm::new(transport, behaviour, peer_id.clone());
-        Ok(Self {
-            peer_id,
-            swarm,
-            topics: HashSet::new(),
-        })
+        let topic = floodsub::Topic::new("reviews");
+
+        let mut swarm = {
+            let mdns = Mdns::new(MdnsConfig::default(), peer_id)?;
+            let mut behaviour = ReviewMeshBehaviour {
+                floodsub: Floodsub::new(peer_id),
+                mdns,
+            };
+            behaviour.floodsub.subscribe(topic.clone());
+            SwarmBuilder::with_executor(transport, behaviour, peer_id, Box::new(|fut| { tokio::spawn(fut); })).build()
+        };
+
+        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+
+        Ok(Self { swarm, topic })
     }
 
-    pub fn join_topic(&mut self, topic: &str) {
-        let t = Topic::new(topic);
-        self.swarm.behaviour_mut().floodsub.subscribe(t.clone());
-        self.topics.insert(t);
+    pub fn publish_review_session(&mut self, review: &ReviewSession) {
+        let review_json = serde_json::to_string(review).unwrap();
+        self.swarm.behaviour_mut().floodsub.publish(self.topic.clone(), review_json.as_bytes());
     }
 
-    pub fn send_message(&mut self, topic: &str, data: &[u8]) {
-        let t = Topic::new(topic);
-        self.swarm.behaviour_mut().floodsub.publish(t, data);
+    pub fn publish_comment(&mut self, comment: &Comment) {
+        let comment_json = serde_json::to_string(comment).unwrap();
+        self.swarm.behaviour_mut().floodsub.publish(self.topic.clone(), comment_json.as_bytes());
     }
 
-    pub fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<(String, Vec<u8>)>> {
+    pub fn get_known_peers(&self) -> HashSet<PeerId> {
+        self.swarm.behaviour().mdns.discovered_nodes().cloned().collect()
+    }
+}
+
+impl Future for NetworkManager {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         loop {
             match self.swarm.poll_next_unpin(cx) {
-                Poll::Ready(Some(SwarmEvent::Behaviour(ReviewMeshBehaviourEvent::Floodsub(FloodsubEvent::Message(msg))))) => {
-                    let topic = msg.topics.get(0).map(|t| t.id().clone()).unwrap_or_default();
-                    return Poll::Ready(Some((topic, msg.data.clone())));
-                }
-                Poll::Ready(Some(_)) => continue,
+                Poll::Ready(Some(event)) => match event {
+                    SwarmEvent::Behaviour(ReviewMeshBehaviourEvent::Floodsub(floodsub_event)) => {
+                        if let floodsub::FloodsubEvent::Message(message) = floodsub_event {
+                            println!(
+                                "Received: '{:?}' from {:?}",
+                                String::from_utf8_lossy(&message.data),
+                                message.source
+                            );
+                        }
+                    }
+                    SwarmEvent::Behaviour(ReviewMeshBehaviourEvent::Mdns(mdns_event)) => {
+                        match mdns_event {
+                            libp2p_mdns::Event::Discovered(list) => {
+                                for (peer, _) in list {
+                                    self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer);
+                                }
+                            }
+                            libp2p_mdns::Event::Expired(list) => {
+                                for (peer, _) in list {
+                                    if !self.swarm.behaviour().mdns.has_node(&peer) {
+                                        self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    SwarmEvent::NewListenAddr { address, .. } => {
+                        println!("Listening on {:?}", address);
+                    }
+                    _ => {}
+                },
+                Poll::Ready(None) => return Poll::Ready(()),
                 Poll::Pending => return Poll::Pending,
-                Poll::Ready(None) => return Poll::Ready(None),
             }
-        }
-    }
-
-    pub fn generate_invite_token(session_id: &str, secret: &[u8]) -> String {
-        let mut mac = Hmac::<Sha256>::new_from_slice(secret).unwrap();
-        mac.update(session_id.as_bytes());
-        let result = mac.finalize().into_bytes();
-        let mut token = session_id.as_bytes().to_vec();
-        token.extend(&result);
-        token.to_base58()
-    }
-
-    pub fn parse_invite_token(token: &str, secret: &[u8]) -> Option<String> {
-        let data = token.from_base58().ok()?;
-        if data.len() < 32 { return None; }
-        let (session_id, mac_bytes) = data.split_at(data.len() - 32);
-        let mut mac = Hmac::<Sha256>::new_from_slice(secret).ok()?;
-        mac.update(session_id);
-        if mac.verify_slice(mac_bytes).is_ok() {
-            Some(String::from_utf8_lossy(session_id).to_string())
-        } else {
-            None
         }
     }
 }

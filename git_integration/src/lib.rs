@@ -80,7 +80,11 @@ pub fn compute_diff(repo_path: &str, target_branch: &str) -> Vec<DiffHunk> {
             s.old_lines = hunk.old_lines() as usize;
             s.new_start = hunk.new_start() as usize;
             s.new_lines = hunk.new_lines() as usize;
-            s.hunk_content.push_str(&format!("@@ -{},{} +{},{} @@\n", s.old_start, s.old_lines, s.new_start, s.new_lines));
+            let old_start = s.old_start;
+            let old_lines = s.old_lines;
+            let new_start = s.new_start;
+            let new_lines = s.new_lines;
+            s.hunk_content.push_str(&format!("@@ -{},{} +{},{} @@\n", old_start, old_lines, new_start, new_lines));
             true
         }),
         Some(&mut |_, _, line| {
