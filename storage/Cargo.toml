@@ -8,3 +8,4 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rusqlite = { version = "0.31", features = ["bundled"] }
 common = { path = "../common" }
+chrono = { version = "0.4", features = ["serde", "clock"] }

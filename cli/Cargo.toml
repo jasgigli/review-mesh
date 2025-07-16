@@ -14,4 +14,4 @@ network = { path = "../network" }
 git_integration = { path = "../git_integration" }
 storage = { path = "../storage" }
 tokio = { version = "1.37", features = ["rt-multi-thread", "macros", "sync"] }
-genpdf = "0.8"
+genpdf = "0.2.0"
