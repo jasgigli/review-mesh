@@ -57,14 +57,21 @@ pub fn compute_diff(repo_path: &str, target_branch: &str) -> Vec<DiffHunk> {
             let mut s = state.borrow_mut();
             if s.in_hunk {
                 let id = hunk_id(&s.file_path, s.old_start, s.new_start, &s.hunk_content);
+                // Extract values before pushing to avoid double borrow
+                let file = s.file_path.clone();
+                let old_start = s.old_start;
+                let old_lines = s.old_lines;
+                let new_start = s.new_start;
+                let new_lines = s.new_lines;
+                let content = s.hunk_content.clone();
                 s.hunks.push(DiffHunk {
                     id,
-                    file: s.file_path.clone(),
-                    old_start: s.old_start,
-                    old_lines: s.old_lines,
-                    new_start: s.new_start,
-                    new_lines: s.new_lines,
-                    content: s.hunk_content.clone(),
+                    file,
+                    old_start,
+                    old_lines,
+                    new_start,
+                    new_lines,
+                    content,
                 });
                 s.hunk_content.clear();
             }
@@ -88,14 +95,21 @@ pub fn compute_diff(repo_path: &str, target_branch: &str) -> Vec<DiffHunk> {
     let mut s = state.borrow_mut();
     if s.in_hunk && !s.hunk_content.is_empty() {
         let id = hunk_id(&s.file_path, s.old_start, s.new_start, &s.hunk_content);
+        // Extract values before pushing to avoid double borrow
+        let file = s.file_path.clone();
+        let old_start = s.old_start;
+        let old_lines = s.old_lines;
+        let new_start = s.new_start;
+        let new_lines = s.new_lines;
+        let content = s.hunk_content.clone();
         s.hunks.push(DiffHunk {
             id,
-            file: s.file_path.clone(),
-            old_start: s.old_start,
-            old_lines: s.old_lines,
-            new_start: s.new_start,
-            new_lines: s.new_lines,
-            content: s.hunk_content.clone(),
+            file,
+            old_start,
+            old_lines,
+            new_start,
+            new_lines,
+            content,
         });
     }
     s.hunks.clone()

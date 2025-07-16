@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>ReviewMesh</h1>
+  <h1>Review-Mesh</h1>
   <p>
     <strong>Peer-to-peer code review in your terminal. No servers. No friction.</strong>
   </p>
@@ -8,8 +8,8 @@
   </p>
   <br />
   <p>
-    <a href="https://github.com/your-org/review-mesh/actions/workflows/ci.yml">
-      <img alt="Build Status" src="https://github.com/your-org/review-mesh/actions/workflows/ci.yml/badge.svg" />
+    <a href="https://github.com/jasgigli/review-mesh/actions/workflows/ci.yml">
+      <img alt="Build Status" src="https://github.com/jasgigli/review-mesh/actions/workflows/ci.yml/badge.svg" />
     </a>
     <a href="https://crates.io/crates/reviewmesh">
       <img alt="Crates.io" src="https://img.shields.io/crates/v/reviewmesh.svg" />
